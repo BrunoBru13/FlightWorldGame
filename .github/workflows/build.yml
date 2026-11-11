@@ -1,0 +1,52 @@
+name: Build installer
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installa le dipendenze
+        run: pip install pyinstaller -r requirements.txt
+
+      - name: Crea l'eseguibile con PyInstaller
+        run: >
+          pyinstaller --noconfirm --noupx --onedir --noconsole
+          --name FlightWorld
+          --collect-all panda3d --collect-all direct
+          FlightWorldGame.py
+
+      # Qui, dopo l'approvazione di SignPath Foundation, si aggiungerà il passaggio
+      # che firma dist\FlightWorld\FlightWorld.exe (istruzioni fornite da SignPath).
+
+      - name: Installa Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Crea l'installer
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.0.0' }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" installer.iss
+
+      - name: Salva l'installer come file della build
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlightWorld-installer
+          path: Output/*.exe
+
+      - name: Allega l'installer alla release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Output/*.exe
